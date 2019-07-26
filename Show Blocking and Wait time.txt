@@ -1,0 +1,113 @@
+Show Blocking and Wait time
+
+When executed against a database in which blocking occur, below script will report lockType, Object waited for and current Wait times.
+
+The script requires access to master..systables. The script queries syslockInfo (as does sp_lock), but further joins sysprocesses with an interpretation of waitresource matching SQL Server 7.0 and SQL Server 2000. 
+
+
+/* 2001/12/17-JKJ */
+
+set nocount on
+go
+select 	
+	'Blocking:' As LockStatus, 
+	cast (mo.req_spid as smallint) As spid,
+	mo.rsc_dbid As dbid,
+	mo.rsc_objid As ObjId,
+	mo.rsc_indid As IndId,
+	substring (vo.name, 1, 4) As Type,
+	substring (mo.rsc_text, 1, 16) as Resource,
+	substring (uo.name, 1, 8) As Mode,
+	substring (xo.name, 1, 5) As Status,
+	0 As WaitTime,
+	substring( object_name(mo.rsc_objid), 1, 24) As Object
+
+from 	
+	master.dbo.syslockinfo mo,
+	master.dbo.spt_values vo,
+	master.dbo.spt_values xo,
+	master.dbo.spt_values uo
+
+where   
+	mo.rsc_type = vo.number
+	and vo.type = 'LR'
+	and mo.req_status = xo.number
+	and xo.type = 'LS'
+	and mo.req_mode + 1 = uo.number
+	and uo.type = 'L'
+	and substring (xo.name, 1, 5) = 'Grant'
+	and exists 
+
+	(select 1 from 
+   	 master.dbo.syslockinfo mi,
+	 master.dbo.spt_values vi,
+	 master.dbo.spt_values xi,
+	 master.dbo.spt_values ui
+	 where 
+		mi.rsc_type = vi.number
+		and vi.type = 'LR'
+		and mi.req_status = xi.number
+		and xi.type = 'LS'
+		and mi.req_mode + 1 = ui.number
+		and ui.type = 'L'			
+		and mi.rsc_dbid = mo.rsc_dbid 
+		and mi.rsc_objid = mo.rsc_objid 
+		and mi.rsc_indid = mo.rsc_indid 
+		and substring (vi.name, 1, 4) = substring (vo.name, 1, 4) 
+		and substring (mi.rsc_text, 1, 16) = substring (mo.rsc_text, 1, 16) 
+		and substring (xi.name, 1, 5) = 'Wait'
+	)
+
+union all
+
+select 	
+	'Waiting:' As LockStatus,
+	cast (m.req_spid as smallint) As spid,
+	m.rsc_dbid As dbid,
+	m.rsc_objid As ObjId,
+	m.rsc_indid As IndId,
+	substring (v.name, 1, 4) As Type,
+	substring (rsc_text, 1, 16) as Resource,
+	substring (u.name, 1, 8) As Mode,
+	substring (x.name, 1, 5) As Status,
+	sp.waittime as WaitTime,
+	substring( object_name(m.rsc_objid), 1, 24) As Object
+
+from 	
+	master.dbo.syslockinfo m,
+	master.dbo.spt_values v,
+	master.dbo.spt_values x,
+	master.dbo.spt_values u,
+	master.dbo.sysprocesses sp
+
+where   
+	m.rsc_type = v.number
+	and v.type = 'LR'
+	and m.req_status = x.number
+	and x.type = 'LS'
+	and m.req_mode + 1 = u.number
+	and u.type = 'L'
+	and substring (x.name, 1, 5) = 'Wait'
+	and cast( sp.spid as smallint ) = cast( m.req_spid as smallint )
+  	and sp.waitresource = 
+	case substring( v.name, 1, 3)
+	when 'RID' then 
+		substring ( v.name, 1, 3) + ': ' + cast( m.rsc_dbid as varchar(2) ) + ':' + substring (m.rsc_text, 1, 16)
+	when 'KEY' then
+		substring ( v.name, 1, 3) + ': ' + cast( m.rsc_dbid as varchar(2) ) + ':' + cast( m.rsc_objid as varchar(30) ) + ':' + cast( m.rsc_indid as varchar(2) ) + ' ' + substring (m.rsc_text, 1, 16)
+	when 'PAG' then 
+		substring ( v.name, 1, 3) + ': ' + cast( m.rsc_dbid as varchar(2) ) + ':' + substring (m.rsc_text, 1, 16)
+	when 'TAB' then 
+		substring ( v.name, 1, 3) + ': ' + cast( m.rsc_dbid as varchar(2) ) + ':' + cast( m.rsc_objid as varchar(30) ) + ' []'
+	end
+
+order by
+
+	Object, 
+	WaitTime 
+
+go
+set nocount off
+go
+
+

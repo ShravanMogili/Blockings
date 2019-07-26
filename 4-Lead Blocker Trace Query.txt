@@ -1,0 +1,118 @@
+--sp_who2 'active'
+go
+select spid, BLOCKED, status, hostname, PROGRAM_NAME, loginame from sys.sysprocesses where blocked <>0
+go
+SELECT
+    spid
+    ,sp.STATUS
+    ,loginame   = SUBSTRING(loginame, 1, 12)
+    ,hostname   = SUBSTRING(hostname, 1, 12)
+    ,blk        = CONVERT(CHAR(3), blocked)
+    ,open_tran
+    ,dbname     = SUBSTRING(DB_NAME(sp.dbid),1,10)
+    ,cmd
+    ,waittype
+    ,waittime
+    ,last_batch
+    ,SQLStatement       =
+        SUBSTRING
+        (
+            qt.text,
+            er.statement_start_offset/2,
+            (CASE WHEN er.statement_end_offset = -1
+                THEN LEN(CONVERT(nvarchar(MAX), qt.text)) * 2
+                ELSE er.statement_end_offset
+                END - er.statement_start_offset)/2
+        )
+FROM master.dbo.sysprocesses sp
+LEFT JOIN sys.dm_exec_requests er
+    ON er.session_id = sp.spid
+OUTER APPLY sys.dm_exec_sql_text(er.sql_handle) AS qt
+WHERE spid IN (SELECT blocked FROM master.dbo.sysprocesses)
+AND blocked = 0
+
+
+--http://sqlserverplanet.com/dba/blocking-processes-lead-blocker
+
+
+
+
+
+
+--View Blocking in Current Database
+
+--https://www.mssqltips.com/sqlservertip/1978/understanding-sql-server-blocking/
+
+--============================================
+--View Blocking in Current Database
+--Author: Timothy Ford
+--http://thesqlagentman.com
+--============================================
+SELECT DTL.resource_type, 
+   CASE  
+       WHEN DTL.resource_type IN ('DATABASE', 'FILE', 'METADATA') THEN DTL.resource_type 
+       WHEN DTL.resource_type = 'OBJECT' THEN OBJECT_NAME(DTL.resource_associated_entity_id) 
+       WHEN DTL.resource_type IN ('KEY', 'PAGE', 'RID') THEN  
+           ( 
+           SELECT OBJECT_NAME([object_id]) 
+           FROM sys.partitions 
+           WHERE sys.partitions.hobt_id =  
+           DTL.resource_associated_entity_id 
+           ) 
+       ELSE 'Unidentified' 
+   END AS requested_object_name, DTL.request_mode, DTL.request_status,   
+   DOWT.wait_duration_ms, DOWT.wait_type, DOWT.session_id AS [blocked_session_id], 
+   sp_blocked.[loginame] AS [blocked_user], DEST_blocked.[text] AS [blocked_command],
+   DOWT.blocking_session_id, sp_blocking.[loginame] AS [blocking_user], 
+   DEST_blocking.[text] AS [blocking_command], DOWT.resource_description    
+FROM sys.dm_tran_locks DTL 
+   INNER JOIN sys.dm_os_waiting_tasks DOWT  
+       ON DTL.lock_owner_address = DOWT.resource_address  
+   INNER JOIN sys.sysprocesses sp_blocked 
+       ON DOWT.[session_id] = sp_blocked.[spid]
+   INNER JOIN sys.sysprocesses sp_blocking 
+       ON DOWT.[blocking_session_id] = sp_blocking.[spid]
+   CROSS APPLY sys.[dm_exec_sql_text](sp_blocked.[sql_handle]) AS DEST_blocked
+   CROSS APPLY sys.[dm_exec_sql_text](sp_blocking.[sql_handle]) AS DEST_blocking
+WHERE DTL.[resource_database_id] = DB_ID()
+
+
+
+--http://www.softminer.net/2008/12/show-number-of-active-database.html
+
+--SELECT @@MAX_CONNECTIONS AS 'Max Allowed Connections'to have select query on sp_who to see the connection of specific database
+
+
+SELECT SPID,
+
+STATUS,
+
+PROGRAM_NAME,
+
+LOGINAME=RTRIM(LOGINAME),
+
+HOSTNAME,
+
+CMD
+
+FROM MASTER.DBO.SYSPROCESSES
+
+WHERE DB_NAME(DBID) = 'DB_Name' AND DBID != 0 
+
+
+
+
+-- Current Transactions, SPID's running on a particular DB
+
+SELECT      REQUEST.session_id, REQUEST.start_time, QUERY.text
+
+FROM        sys.dm_exec_requests REQUEST
+
+CROSS APPLY
+
+            sys.dm_exec_sql_text(REQUEST.sql_handle) QUERY 
+            
+            --PL_LOAN_PERFNC_DLY_SNAP_FACT_HISTORY 
+
+
+

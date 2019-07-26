@@ -1,0 +1,74 @@
+SetupDeadlockTrace
+
+Set the location where the trace files should be written to. When you run this script, your server will start tracing all deadlock events to the specified location.
+
+
+
+/****************************************************/
+/* Created by: SQL Server 2008 Profiler */
+/* Date: 04/29/2009 04:03:30 PM */
+/****************************************************/
+
+
+-- Create a Queue
+declare @rc int
+declare @TraceID int
+declare @maxfilesize bigint
+declare @OutputFileName NVARCHAR(256)
+
+set @maxfilesize = 10 --mb 
+set @OutputFileName = '<<PUT YOUR FILE LOCATION HERE>>\ProdDeadlocks' + Convert(Varchar(20), GetDate(), 112) + Replace(Convert(Varchar(20), GetDate(), 108), ':', '')
+
+exec @rc = sp_trace_create @TraceID output, 2, @OutputFileName, @maxfilesize, NULL 
+if (@rc != 0) goto error
+
+-- Set the events
+declare @on bit
+set @on = 1
+exec sp_trace_setevent @TraceID, 148, 11, @on
+exec sp_trace_setevent @TraceID, 148, 12, @on
+exec sp_trace_setevent @TraceID, 148, 14, @on
+exec sp_trace_setevent @TraceID, 148, 1, @on
+exec sp_trace_setevent @TraceID, 25, 15, @on
+exec sp_trace_setevent @TraceID, 25, 32, @on
+exec sp_trace_setevent @TraceID, 25, 1, @on
+exec sp_trace_setevent @TraceID, 25, 9, @on
+exec sp_trace_setevent @TraceID, 25, 57, @on
+exec sp_trace_setevent @TraceID, 25, 2, @on
+exec sp_trace_setevent @TraceID, 25, 10, @on
+exec sp_trace_setevent @TraceID, 25, 11, @on
+exec sp_trace_setevent @TraceID, 25, 35, @on
+exec sp_trace_setevent @TraceID, 25, 12, @on
+exec sp_trace_setevent @TraceID, 25, 13, @on
+exec sp_trace_setevent @TraceID, 25, 6, @on
+exec sp_trace_setevent @TraceID, 25, 14, @on
+exec sp_trace_setevent @TraceID, 25, 22, @on
+exec sp_trace_setevent @TraceID, 59, 32, @on
+exec sp_trace_setevent @TraceID, 59, 1, @on
+exec sp_trace_setevent @TraceID, 59, 57, @on
+exec sp_trace_setevent @TraceID, 59, 2, @on
+exec sp_trace_setevent @TraceID, 59, 14, @on
+exec sp_trace_setevent @TraceID, 59, 22, @on
+exec sp_trace_setevent @TraceID, 59, 35, @on
+exec sp_trace_setevent @TraceID, 59, 12, @on
+
+
+-- Set the Filters
+declare @intfilter int
+declare @bigintfilter bigint
+
+-- Set the trace status to start
+exec sp_trace_setstatus @TraceID, 1
+
+-- display trace id for future references
+select TraceID=@TraceID
+goto finish
+
+error: 
+select ErrorCode=@rc
+
+finish: 
+go
+
+
+
